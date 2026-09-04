@@ -1,0 +1,45 @@
+{
+  "name": "avl-transport-system",
+  "version": "1.0.0",
+  "description": "Plataforma de Monitoreo de Transporte Público en Tiempo Real (Sistema AVL)",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "simulator",
+    "shared"
+  ],
+  "scripts": {
+    "start:backend": "npm run start --prefix backend",
+    "start:frontend": "npm run dev --prefix frontend",
+    "start:simulator": "npm run start --prefix simulator",
+    "dev": "npm run start:backend & npm run start:frontend"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "leaflet": "^1.9.4",
+    "mqtt": "^5.15.2",
+    "mssql": "^12.7.0",
+    "react-leaflet": "^5.0.0",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.4.1",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^7.0.2"
+  }
+}
