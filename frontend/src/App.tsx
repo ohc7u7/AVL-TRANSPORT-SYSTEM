@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet';
 import { io } from 'socket.io-client';
 import './App.css';
+import { buildTripReport } from './tripReport';
 import { buildDemoRoutes, getCompliance, haversineM, PLAYBACK_TICK_MS, PLAYBACK_RATE } from './demoRoute';
 
 // Reparar las rutas de los iconos predeterminados de la librería Leaflet (Mapa)
@@ -113,6 +114,7 @@ export default function App() {
   // Estados de Reproducción Simulada
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [startedAt, setStartedAt] = useState(() => Date.now());
   const [playRequested, setIsPlaying] = useState(true);
   const isPlaying = playRequested && currentIndex < vehiclePath.length - 1;
   const isDraggingRef = useRef(false);
@@ -180,6 +182,7 @@ export default function App() {
     setSavingStats(true);
     setSaveSuccess(null);
     try {
+      const exportedAt = Date.now();
       const statsObj = {
         patente: 'SIM-001',
         servicio: '503',
@@ -189,7 +192,8 @@ export default function App() {
         puntos_recorridos: currentIndex + 1,
         progreso_porcentaje: Math.round(progress * 100) / 100,
         cumplimiento: compliance,
-        fecha: new Date().toISOString(),
+        fecha: new Date(exportedAt).toISOString(),
+        ...buildTripReport(vehiclePath, routePoints, currentIndex, startedAt, exportedAt),
       };
 
       const res = await fetch(`${BACKEND_URL}/api/stats/export`, {
@@ -214,6 +218,7 @@ export default function App() {
   const togglePlay = () => {
     if (!isPlaying && currentIndex === vehiclePath.length - 1) {
       setCurrentIndex(0);
+      setStartedAt(Date.now());
     }
     setIsPlaying(!isPlaying);
   };
