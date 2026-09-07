@@ -1,92 +1,150 @@
-# 🚌 Sistema AVL (Automatic Vehicle Location) para Transporte Público
+# AVL Transport System
 
-Documentación integral del proyecto de simulación y monitoreo de flota en tiempo real. 
+**Demostración técnica de seguimiento vehicular, evaluación de adherencia a ruta y trazabilidad de recorridos.**
 
----
+El proyecto representa el desplazamiento de una micro sobre calles de Temuco y permite observar cómo cambia su estado al abandonar y retomar un trazado de referencia. Combina visualización cartográfica, procesamiento de coordenadas, comunicación mediante Socket.IO y una capa de persistencia en SQL Server.
 
-## 🏛️ 1. Contexto del Negocio: ¿Para qué sirve este sistema?
+## Objetivo de la actividad
 
-Nuestra empresa se dedica a desarrollar **soluciones tecnológicas integrales para el transporte colectivo regional**. Unimos hardware telemático (GPS en los microbuses) con software de control en tiempo real.
+Implementar un escenario reproducible que permita evaluar el movimiento de un vehículo, su distancia al recorrido asignado y la secuencia temporal de sus desviaciones. El resultado reúne una demostración visual y componentes de backend para recepción e historial de posiciones GPS.
 
-### ¿Por qué hacer una Plataforma AVL?
-En Chile, el **MTT (Ministerio de Transportes y Telecomunicaciones)** establece normativas estrictas para los operadores de transporte público, agrupadas en "Perímetros de Exclusión" y "Condiciones de Operación". Estos sistemas no son solo un mapa bonito, son herramientas **financieras y operativas obligatorias**.
+## Funcionalidades
 
-1. **Subsidios del Estado:** El gobierno paga a las líneas de buses basándose en el cumplimiento de despachos, trazados y frecuencias. Si la empresa no puede probar tecnológicamente por dónde andaba el bus, no se le paga el subsidio.
-2. **Fiscalización:** Se deben generar reportes exactos de puntualidad, regularidad (distancia/tiempo entre máquinas) y trazabilidad. 
-3. **Gestión de Flota:** Los operadores necesitan saber al instante si un conductor se salió de la ruta (Desviación), si va muy lento, o si está adelantando a otro (acelerando desgaste y compitiendo por pasajeros).
+- **Recorrido sobre calles:** avance por avenida Caupolicán, desvío por Diego Portales y Lynch, reincorporación por Manuel Montt y continuación hasta superar el término del trazado.
+- **Movimiento interpolado:** conservación de las esquinas y reproducción a 3× para revisar el recorrido completo en aproximadamente 74 segundos.
+- **Clasificación de posición:** estados «En ruta», «Desviación» y «Fuera de ruta», con distancia al trazado expresada en metros.
+- **Control de reproducción:** pausa, selección de un punto del recorrido y reinicio manual después de la detención final.
+- **Reporte JSON:** resumen del viaje, cronología de cambios de estado, duración por condición, salidas, reincorporaciones y alejamiento máximo.
+- **Servicios de datos:** API de vehículos, rutas e historial GPS, además de recepción y retransmisión de posiciones mediante Socket.IO.
 
-### ¿Cómo usamos estos datos a nuestro favor?
-La empresa dueña de la flota utiliza nuestro sistema para **garantizar la mayor recaudación posible de subsidios** logrando un 100% de cumplimiento. Además, con la data histórica en la base de datos, pueden optimizar horarios (mandar buses cuando la demanda es alta) e identificar conductores que incumplen los trazados.
+## Stack tecnológico
 
----
+| Capa | Tecnologías | Aplicación |
+| --- | --- | --- |
+| Interfaz | React, TypeScript, Vite | Panel de seguimiento y controles de reproducción |
+| Cartografía | Leaflet, React Leaflet, OpenStreetMap | Mapa, trazado de referencia y trayectoria del vehículo |
+| Geometría | Coordenadas obtenidas de OSRM y almacenadas en JSON | Recorrido reproducible sin consultar el motor de rutas en cada ejecución |
+| Backend | Node.js, TypeScript, Express | API HTTP, validación y procesamiento de posiciones |
+| Comunicación | Socket.IO | Conexión de clientes y eventos de telemetría |
+| Persistencia | SQL Server, mssql | Vehículos, puntos de ruta y registros GPS con fecha y hora |
+| Organización | npm workspaces, Git Flow, Conventional Commits | Gestión del monorepo e historial de cambios |
 
-## ⚙️ 2. Arquitectura de Tecnologías
+## Arquitectura y alcance actual
 
-Para lograr el monitoreo exacto, la latencia debe ser mínima (milisegundos) y a la vez el sistema debe guardar un trillón de datos históricos impecablemente ordenados.
+El repositorio contiene dos flujos de ejecución:
 
-### 🔌 Socket.io (Tiempo Real)
-**¿Para qué sirve en este contexto?**
-Los GPS vehiculares transmiten sus coordenadas constantemente (ej. cada 2 o 5 segundos). Una API tradicional (REST / HTTP) no soporta millones de peticiones individuales eficientemente debido al *overhead* de conexión HTTP.
-* **Socket.io** crea un *túnel bidireccional continuo* (WebSockets).
-* Permite que el panel de control del despachador en la pantalla (nuestro Frontend) reciba el movimiento del bus **de forma inmediata**, sin tener que refrescar la página.
+| Flujo | Funcionamiento |
+| --- | --- |
+| Demostración visual | El navegador reproduce la trayectoria local, calcula la distancia a sus segmentos y genera el reporte. El backend recibe la exportación y guarda el archivo JSON. |
+| Telemetría de prueba | El simulador Node.js envía eventos `gps:position`. El backend valida los datos, intenta persistirlos en SQL Server, evalúa la ruta y emite `gps:update`. |
 
-### 🗄️ SQL Server (Persistencia e Histórico)
-**¿Para qué sirve SQL Server aquí?**
-Toda la maravilla del tiempo real es efímera. Cuando el MTT viene a auditar el mes pasado para pagar subsidios, Socket.io no tiene memoria, solo maneja el "ahora". 
-* **SQL Server** actúa como el pilar de almacenamiento histórico (`GPS_Posicion`).
-* Está estructurado con bases de datos relacionales porque las reglas de negocio son estrictas (`Vehiculo` tiene muchas `GPS_Posicion`). 
-* Permite ejecutar cruces masivos (Ej: *Muéstrame todos los puntos GPS del bus SIM-001 de ayer que estuvieron a más de 100 metros de la Ruta 503*).
+Actualmente, el vehículo del mapa se mueve mediante la reproducción local; no consume los eventos `gps:update`. El simulador independiente utiliza su propio recorrido de prueba. El indicador «Conectado» confirma la conexión Socket.IO con el backend, no el estado de SQL Server ni la recepción de un GPS físico.
 
----
+### Criterio de adherencia
 
-## 📂 3. Documentación del Repositorio (Estructura)
+| Distancia al trazado | Estado |
+| --- | --- |
+| Hasta 30 m | En ruta |
+| Más de 30 m y hasta 100 m | Desviación |
+| Más de 100 m | Fuera de ruta |
 
-El sistema está construido como un **Monorepo** con NodeJS (`npm workspaces`). 
+En la demostración, la distancia se calcula contra los segmentos finitos de la ruta, incluidos sus extremos. Esto evita falsas desviaciones entre vértices y permite detectar el avance más allá del término del recorrido. La evaluación del backend compara la posición con los puntos de ruta almacenados en SQL Server.
+
+Los umbrales y el servicio 503 corresponden al escenario de prueba; no acreditan un trazado autorizado ni cumplimiento normativo del MTT.
+
+### Reportes y referencia temporal
+
+La exportación agrupa la información por cambios de estado, en lugar de incluir cada punto de animación. Presenta fecha y hora en `America/Santiago` y conserva referencias ISO para su procesamiento.
+
+Las duraciones corresponden al tiempo simulado: la reproducción acelerada comprime su visualización, las pausas no agregan tiempo y mover la barra reconstruye el recorrido hasta el punto seleccionado. La hora de exportación corresponde al momento real del guardado. Los eventos se detectan por muestra, con una resolución temporal simulada de 0,36 segundos.
+
+## Estructura del repositorio
 
 ```text
-AVL-Transport-System/
-│
-├── 📁 backend/                # Servidor central (Express)
-│   ├── src/
-│   │   ├── config/          # Variables de entorno y llaves.
-│   │   ├── routes/          # API REST: Endpoints como /api/stats/export (Guarda JSON).
-│   │   ├── business/        # REGLAS DEL NEGOCIO (Compliance/Desviaciones).
-│   │   ├── server.ts        # Entry point del servidor, levanta HTTP y WebSockets.
-│   │   └── realtime/        # Hilos WebSockets: Recibe GPS y lo inserta a SQL.
-│   └── package.json
-│
-├── 📁 frontend/               # Panel de Fiscalización (React + Leaflet)
-│   ├── src/
-│   │   ├── App.tsx          # Corazón visual: Motor de mapa, reproductor OSRM, sockets.
-│   │   └── App.css          # Estilos de UI (Barra transporte, botones, mapa oscuro).
-│   └── package.json
-│
-├── 📁 simulator/              # Emulador IoT de Bus AVL.
-│   ├── src/
-│   │   └── index.ts         # Motor del bus virtual: Recorre puntos e inyecta sockets al backend.
-│   └── package.json
-│
-├── 📁 database/               # Esquemas relacionales SQL Server
-│   ├── 001_create_tables.sql
-│   └── 002_seed_data.sql
-│
-└── 📁 stats/                  # Apartado de Repositorio para JSON Exportables
-    └── (Aquí se guardan las exportaciones manuales del frontend)
+backend/src/
+  business/       Evaluación de ruta y diferencia de horario
+  config/         Configuración de entorno
+  database/       Conexión a SQL Server
+  geospatial/     Distancias e interpolación
+  gps/            Contratos y validación de posiciones
+  realtime/       Eventos Socket.IO
+  routes/         Endpoints HTTP
+  vehicles/       Repositorios de datos
+  server.ts       Inicio del servidor y exportación JSON
+frontend/src/
+  App.tsx         Panel cartográfico y reproducción
+  demo-route.json Geometría del escenario
+  demoRoute.ts    Interpolación y clasificación de posición
+  tripReport.ts   Resumen y cronología del viaje
+simulator/src/    Emisor independiente de telemetría
+database/        Scripts de esquema y datos iniciales
 ```
 
----
+## Ejecución local
 
-## 🚀 4. Guía Rápida de Ejecución
+Entorno utilizado para la demostración: Node.js 24 y npm. SQL Server se requiere para probar la persistencia y las consultas de telemetría. La carga del mapa base requiere acceso a Internet.
 
-1. **Configurar DB:** Correr los scripts de `database/` en SQL Server.
-2. **Back-end:** Entrar a `backend/` y correr `npm start` (abre Socket.io en puerto 3000).
-3. **Simulador:** Entrar a `simulator/` y correr `npm start` (simula la placa de GPS física de un bus inyectando data por Socket.io).
-4. **Front-end:** Entrar a `frontend/` y correr `npm run dev` (visitar http://localhost:5173).
+### 1. Instalar dependencias
 
----
+Desde la raíz del repositorio:
 
-## 💾 5. Gestión del JSON (Estadísticas Guardadas)
+```bash
+npm ci
+```
 
-El Frontend posee un botón de **Exportación**. Cuando el despachador necesita congelar las estadísticas (porcentaje completado del viaje, última lat/lng, cumplimiento), la interfaz se comunica con el servidor Node.js que procesa un archivo `.json` y lo salva físicamente en la carpeta `/stats` del repositorio.
+### 2. Configurar el entorno
 
-Este proceso representa cómo la empresa exportaría métricas offline o aislaría episodios de la ruta (Ej. "Guardar snapshot de infracción") para revisión del regulador.
+Copiar `.env.example` a `.env` y completar las credenciales locales de SQL Server. El backend utiliza `PORT`, `DB_HOST`, `DB_USER`, `DB_PASSWORD` y `DB_NAME`.
+
+Por defecto, el frontend y el backend utilizan `http://localhost:5173` y `http://localhost:3000`. Si se accede al frontend desde otra dirección, establecer `CORS_ORIGIN` en el entorno del backend con ese origen exacto. Para cambiar el destino del frontend, definir `VITE_API_BASE_URL` en `frontend/.env`.
+
+Los archivos de entorno y las exportaciones generadas están excluidos del control de versiones.
+
+### 3. Iniciar la demostración
+
+Ejecutar cada comando en una terminal independiente:
+
+```bash
+npm run start:backend
+npm run start:frontend
+```
+
+Abrir [http://localhost:5173](http://localhost:5173). El panel inicia el recorrido automáticamente. Al finalizar, el vehículo permanece detenido fuera de ruta; el botón de reproducción permite comenzar otro viaje.
+
+El botón **Exportar a JSON** guarda el estado del recorrido y su cronología mediante el backend. Con el comando de desarrollo indicado, los archivos se escriben en `backend/stats/`.
+
+### 4. Probar la telemetría con SQL Server
+
+Ejecutar en orden:
+
+1. `database/001_create_tables.sql`: creación de base de datos y tablas.
+2. `database/002_seed_data.sql`: vehículo y ruta de prueba. Este script reemplaza los puntos existentes del servicio 503.
+
+Con el backend activo, iniciar el emisor:
+
+```bash
+npm run start:simulator
+```
+
+La tabla `GPS_Posicion` registra vehículo, fecha y hora, latitud, longitud y velocidad. La disponibilidad del backend puede consultarse en [http://localhost:3000/api/health](http://localhost:3000/api/health).
+
+## Verificación técnica
+
+```bash
+npm run build --prefix backend
+npm run build --prefix frontend
+npx --no-install tsc --project simulator/tsconfig.json --noEmit
+npm run lint --prefix frontend
+```
+
+Estas comprobaciones revisan compilación, tipos y análisis estático. La persistencia debe verificarse con una instancia SQL Server configurada. Los scripts `test` del backend y del simulador son marcadores y todavía no ejecutan una suite automatizada.
+
+## Flujo de trabajo
+
+- `develop`: integración del desarrollo.
+- `master`: versión de entrega.
+- `feature/*`: funcionalidades desarrolladas desde `develop`.
+- `release/*`: preparación de entregas e integración en `master` y `develop`.
+- `hotfix/*`: correcciones sobre `master`, integradas también en `develop`.
+
+Los cambios se organizan por responsabilidad mediante Conventional Commits, con alcances como `backend`, `frontend`, `database`, `simulator` y `reports`.
